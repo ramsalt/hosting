@@ -8,24 +8,58 @@ if [[ "-" != "${DEBUG:-}" ]]; then
   set -x
 fi
 
+# Code for error "Missing prerequisite"
+readonly ERR_PRE_REQ=1
+# Code for "Runtime error"
+readonly ERR_RUNTIME=2
+
+
 main() {
+  check_distro
+  do_upgrade
   setup_data_partition
 }
 
-setup_data_partition() {
+
+error() {
+  cat <<< "${0##*/}: $@" 1>&2;
+}
+
+
+check_distro () {
+  if ! [[ -r '/etc/os-release' ]]; then
+    error "Missing OS Release file!"
+    exit $ERR_PRE_REQ
+  fi
+  local distro=$(sed -n '/^ID=/s///p' /etc/os-release)
+  if [[ "${distro}" != "debian" ]]; then
+    error "Only 'debian' systems are supported!"
+    exit $ERR_PRE_REQ
+  fi
+}
+
+
+do_upgrade () {
+  apt-get --assume-yes update
+  apt-get --assume-yes upgrade
+  apt-get --assume-yes dist-upgrade
+}
+
+
+setup_data_partition () {
   local data_mount=/mnt/data
 
   # Ensure the mount directory is empty!
   if [[ $(find "$data_mount" -type f | wc -l) -gt 0 ]]; then
-    echo "[ERROR] Mount directory '${data_mount}' is not empty!" 1>&2
-    exit 1
+    error "Mount directory '${data_mount}' is not empty!"
+    exit $ERR_PRE_REQ
   fi
 
   # Ensure that we can detect the device.
   local block_dev_name=$(mount -l | grep "${data_mount}" | cut -d' ' -f1)
   if [[ -z "$block_dev_name" ]]; then
-    echo "[ERROR] Could not find the device for mount '${data_mount}'." 1>&2
-    exit 2
+    error "Could not find the device for mount '${data_mount}'."
+    exit $ERR_PRE_REQ
   fi
 
   # Store the old UUID to replace it in fstab.
@@ -44,8 +78,8 @@ setup_data_partition() {
 
   # Check if data_mount is re-mounted.
   if [[ -z "$(mount  -l | grep $data_mount )" ]]; then
-    echo "[ERROR] Re-mount error: '${data_mount}' did not auto-mount." 1>&2
-    exit 3
+    error "Re-mount error: '${data_mount}' did not auto-mount."
+    exit $ERR_RUNTIME
   fi
 
   # Create symlink-destinations for docker and wodby.
