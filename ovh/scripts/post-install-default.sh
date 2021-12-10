@@ -48,8 +48,13 @@ setup_data_partition() {
     exit 3
   fi
 
-  # Create symlinks for docker and wodby.
+  # Create symlink-destinations for docker and wodby.
   mkdir "${data_mount}/var-lib-docker" "${data_mount}/srv-wodby"
+
+  # 'rm' will only remove the symlinks, if there are directories it will fail.
+  rm -f /srv/wodby /var/lib/docker
+
+  # Create the symlinks to the separate disk.
   ln -s "${data_mount}/var-lib-docker" /var/lib/docker
   ln -s "${data_mount}/srv-wodby" /srv/wodby
   # All done.
